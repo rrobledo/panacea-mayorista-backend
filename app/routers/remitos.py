@@ -14,6 +14,7 @@ from ..schemas import (
 )
 from ..state import (
     EstadoRemito,
+    EstadoRemitoFilter,
     STATE_TIMESTAMP_MAP,
     VALID_TRANSITIONS,
     derive_estado,
@@ -63,6 +64,7 @@ def list_remitos(
     fecha_desde: Optional[datetime] = Query(None, description="Filter by fecha_entrega >= fecha_desde"),
     fecha_hasta: Optional[datetime] = Query(None, description="Filter by fecha_entrega <= fecha_hasta"),
     cliente_id: Optional[int] = Query(None),
+    status: Optional[EstadoRemitoFilter] = Query(None, description="Filter by remito status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -74,7 +76,34 @@ def list_remitos(
         query = query.filter(Remito.fecha_entrega <= fecha_hasta)
     if cliente_id:
         query = query.filter(Remito.cliente_id == cliente_id)
-    remitos = query.order_by(Remito.fecha_entrega.desc()).offset(skip).limit(limit).all()
+    if status == EstadoRemitoFilter.PENDIENTE:
+        query = query.filter(
+            Remito.fecha_preparacion.is_(None),
+            Remito.fecha_listo.is_(None),
+            Remito.fecha_despacho.is_(None),
+            Remito.fecha_recibido.is_(None),
+        )
+    elif status == EstadoRemitoFilter.EN_PREPARACION:
+        query = query.filter(
+            Remito.fecha_preparacion.isnot(None),
+            Remito.fecha_listo.is_(None),
+            Remito.fecha_despacho.is_(None),
+            Remito.fecha_recibido.is_(None),
+        )
+    elif status == EstadoRemitoFilter.LISTO_PARA_ENTREGA:
+        query = query.filter(
+            Remito.fecha_listo.isnot(None),
+            Remito.fecha_despacho.is_(None),
+            Remito.fecha_recibido.is_(None),
+        )
+    elif status == EstadoRemitoFilter.EN_CAMINO:
+        query = query.filter(
+            Remito.fecha_despacho.isnot(None),
+            Remito.fecha_recibido.is_(None),
+        )
+    elif status == EstadoRemitoFilter.ENTREGADO:
+        query = query.filter(Remito.fecha_recibido.isnot(None))
+    remitos = query.order_by(Remito.fecha_carga.desc()).offset(skip).limit(limit).all()
     return [RemitoSummarySchema.model_validate(r) for r in remitos]
 
 

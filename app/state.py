@@ -14,6 +14,14 @@ class EstadoRemito(str, Enum):
     FACTURADO = "facturado"
 
 
+class EstadoRemitoFilter(str, Enum):
+    PENDIENTE = "Pendiente"
+    EN_PREPARACION = "En Preparacion"
+    LISTO_PARA_ENTREGA = "Listo Para Entrega"
+    EN_CAMINO = "En Camino"
+    ENTREGADO = "Entregado"
+
+
 VALID_TRANSITIONS: dict[EstadoRemito, EstadoRemito] = {
     EstadoRemito.CREADO: EstadoRemito.EN_PRODUCCION,
     EstadoRemito.EN_PRODUCCION: EstadoRemito.PREPARANDO,
