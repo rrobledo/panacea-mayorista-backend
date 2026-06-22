@@ -1,23 +1,12 @@
-from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from ..database import get_db
-from ..models import Cliente, Documento
+from ..models import Cliente
 from ..schemas import ClienteSchema
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
-
-
-def _four_months_ago() -> date:
-    today = date.today()
-    month = today.month - 4
-    year = today.year
-    if month <= 0:
-        month += 12
-        year -= 1
-    return today.replace(year=year, month=month)
 
 
 @router.get("", response_model=list[ClienteSchema])
@@ -27,13 +16,7 @@ def list_clientes(
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
-    cutoff = _four_months_ago()
-    active_subq = (
-        db.query(Documento)
-        .filter(Documento.idcliente == Cliente.idcliente, Documento.fechadocumento > cutoff)
-        .exists()
-    )
-    query = db.query(Cliente).filter(active_subq)
+    query = db.query(Cliente)
     if q:
         pattern = f"%{q}%"
         query = query.filter(

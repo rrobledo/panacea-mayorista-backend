@@ -8,15 +8,6 @@ from sqlalchemy.orm import relationship
 from .database import Base
 
 
-class Documento(Base):
-    __tablename__ = "documentos"
-    __table_args__ = {"schema": "public"}
-
-    iddocumento = Column(Integer, primary_key=True)
-    idcliente = Column(Integer, ForeignKey("public.clientes.idcliente"), nullable=False)
-    fechadocumento = Column(TIMESTAMP, nullable=False)
-
-
 class Cliente(Base):
     __tablename__ = "clientes"
     __table_args__ = {"schema": "public"}

@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import Cliente, Documento, Producto, Remito, RemitoDetalle
+from app.models import Cliente, Producto, Remito, RemitoDetalle
 
 # StaticPool: all sessions share the same in-memory SQLite connection
 # schema_translate_map: public.table → main.table (SQLite default schema is "main")
@@ -50,7 +50,6 @@ def clean_tables():
         db.execute(text("DELETE FROM costos_remitodetalles"))
         db.execute(text("DELETE FROM costos_remitos"))
         db.execute(text("DELETE FROM costos_productos"))
-        db.execute(text("DELETE FROM documentos"))
         db.execute(text("DELETE FROM clientes"))
         db.commit()
     finally:
@@ -78,19 +77,6 @@ def sample_cliente(db):
     db.add(c)
     db.commit()
     return c
-
-
-@pytest.fixture
-def sample_documento(db, sample_cliente):
-    from datetime import datetime, timezone, timedelta
-    doc = Documento(
-        iddocumento=1,
-        idcliente=sample_cliente.idcliente,
-        fechadocumento=datetime.now(tz=timezone.utc) - timedelta(days=30),
-    )
-    db.add(doc)
-    db.commit()
-    return doc
 
 
 @pytest.fixture
