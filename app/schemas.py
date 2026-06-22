@@ -141,3 +141,18 @@ class ProductoPendienteSchema(BaseModel):
     nombre: str
     unidad_medida: str
     cantidad_pendiente: int
+
+
+class ProductoItemSchema(BaseModel):
+    producto: str
+    cantidad: int
+
+
+class ResponsableProductosSchema(BaseModel):
+    responsable: str
+    productos: list[ProductoItemSchema]
+
+
+class ProductosPendientesPorDiaSchema(BaseModel):
+    fecha: str
+    responsables: list[ResponsableProductosSchema]

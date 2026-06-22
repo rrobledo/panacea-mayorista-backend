@@ -83,3 +83,44 @@ def test_productos_pendientes_por_dia_empty(client):
     resp = client.get("/reports/productos-pendientes-por-dia")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_productos_pendientes_por_dia_groups_by_responsable(client, sample_cliente, sample_producto):
+    fecha = (datetime.now(tz=timezone.utc) + timedelta(days=2)).isoformat()
+    client.post("/remitos", json={**make_remito(1, sample_producto.id), "fecha_entrega": fecha})
+
+    resp = client.get("/reports/productos-pendientes-por-dia")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    entry = data[0]
+    assert "fecha" in entry
+    assert "responsables" in entry
+    assert len(entry["responsables"]) == 1
+    responsable_entry = entry["responsables"][0]
+    assert "responsable" in responsable_entry
+    assert "productos" in responsable_entry
+    assert len(responsable_entry["productos"]) == 1
+    producto_entry = responsable_entry["productos"][0]
+    assert "producto" in producto_entry
+    assert "cantidad" in producto_entry
+    assert producto_entry["cantidad"] == 10
+
+
+def test_productos_pendientes_por_dia_filters_by_fecha(client, sample_cliente, sample_producto):
+    fecha_in = (datetime.now(tz=timezone.utc) + timedelta(days=2)).date().isoformat()
+    fecha_out = (datetime.now(tz=timezone.utc) + timedelta(days=10)).date().isoformat()
+    fecha_in_dt = (datetime.now(tz=timezone.utc) + timedelta(days=2)).isoformat()
+    fecha_out_dt = (datetime.now(tz=timezone.utc) + timedelta(days=10)).isoformat()
+
+    client.post("/remitos", json={**make_remito(1, sample_producto.id), "fecha_entrega": fecha_in_dt})
+    client.post("/remitos", json={**make_remito(1, sample_producto.id), "fecha_entrega": fecha_out_dt})
+
+    resp = client.get(
+        "/reports/productos-pendientes-por-dia",
+        params={"fecha_desde": fecha_in, "fecha_hasta": fecha_in},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["fecha"] == fecha_in

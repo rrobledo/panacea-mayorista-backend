@@ -8,7 +8,14 @@ from sqlalchemy import text
 
 from ..database import get_db
 from ..models import Remito, RemitoDetalle
-from ..schemas import PendientesPorDiaSchema, ProductoPendienteSchema, RemitoSummarySchema
+from ..schemas import (
+    PendientesPorDiaSchema,
+    ProductoItemSchema,
+    ProductoPendienteSchema,
+    ProductosPendientesPorDiaSchema,
+    ResponsableProductosSchema,
+    RemitoSummarySchema,
+)
 from ..state import EstadoRemito
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -95,39 +102,51 @@ def pendientes_por_dia(
 
 @router.get(
     "/productos-pendientes-por-dia",
-    response_model=list[ProductoPendienteSchema],
-    summary="Productos pendientes por día",
+    response_model=list[ProductosPendientesPorDiaSchema],
+    summary="Productos pendientes por día agrupados por responsable",
     description=(
-        "Returns the total pending quantity of each product grouped by delivery date, "
+        "Returns pending product quantities grouped by delivery date and then by responsable, "
         "considering only remitos that have not been received or invoiced."
     ),
 )
-def productos_pendientes_por_dia(db: Session = Depends(get_db)):
+def productos_pendientes_por_dia(
+    fecha_desde: Optional[str] = Query(None, description="Filter by fecha_entrega >= fecha_desde (YYYY-MM-DD)"),
+    fecha_hasta: Optional[str] = Query(None, description="Filter by fecha_entrega <= fecha_hasta (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+):
     sql = text("""
         SELECT
             DATE(r.fecha_entrega) AS fecha,
-            p.id                  AS producto_id,
-            p.codigo,
-            p.nombre,
-            p.unidad_medida,
-            SUM(d.cantidad - COALESCE(d.entregado, 0)) AS cantidad_pendiente
+            p.responsable,
+            p.nombre              AS producto,
+            SUM(d.cantidad - COALESCE(d.entregado, 0)) AS cantidad
         FROM costos_remitodetalles d
         JOIN costos_remitos r   ON d.remito_id = r.id
         JOIN costos_productos p ON d.producto_id = p.id
         WHERE r.fecha_facturacion IS NULL
           AND r.fecha_recibido IS NULL
-        GROUP BY DATE(r.fecha_entrega), p.id, p.codigo, p.nombre, p.unidad_medida
-        ORDER BY fecha ASC, p.nombre ASC
+          AND (:fecha_desde IS NULL OR DATE(r.fecha_entrega) >= :fecha_desde)
+          AND (:fecha_hasta IS NULL OR DATE(r.fecha_entrega) <= :fecha_hasta)
+        GROUP BY DATE(r.fecha_entrega), p.responsable, p.nombre
+        ORDER BY fecha ASC, p.responsable ASC, p.nombre ASC
     """)
-    rows = db.execute(sql).mappings().all()
-    return [
-        ProductoPendienteSchema(
-            fecha=str(row["fecha"]),
-            producto_id=row["producto_id"],
-            codigo=row["codigo"],
-            nombre=row["nombre"],
-            unidad_medida=row["unidad_medida"],
-            cantidad_pendiente=int(row["cantidad_pendiente"]),
+    rows = db.execute(sql, {"fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta}).mappings().all()
+
+    # Group: fecha -> responsable -> productos
+    by_fecha: dict[str, dict[str, list[ProductoItemSchema]]] = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        fecha_key = str(row["fecha"])
+        by_fecha[fecha_key][row["responsable"]].append(
+            ProductoItemSchema(producto=row["producto"], cantidad=int(row["cantidad"]))
         )
-        for row in rows
+
+    return [
+        ProductosPendientesPorDiaSchema(
+            fecha=fecha,
+            responsables=[
+                ResponsableProductosSchema(responsable=resp, productos=productos)
+                for resp, productos in sorted(responsables.items())
+            ],
+        )
+        for fecha, responsables in sorted(by_fecha.items())
     ]
