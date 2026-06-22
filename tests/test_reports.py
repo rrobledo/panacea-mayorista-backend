@@ -53,6 +53,31 @@ def test_pendientes_por_dia_groups_correctly(client, sample_cliente, sample_prod
     assert totals[fecha_1_key] == 2
     assert totals[fecha_2_key] == 1
 
+    first_group = next(d for d in data if d["fecha"] == fecha_1_key)
+    assert first_group["total_pendientes"] == 2
+    assert first_group["total_en_preparacion"] == 0
+    assert first_group["total_listo_para_entrega"] == 0
+    assert first_group["total_en_camino"] == 0
+    assert first_group["total_entregados"] == 0
+
+
+def test_pendientes_por_dia_filters_by_fecha(client, sample_cliente, sample_producto):
+    fecha_1 = (datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat()
+    fecha_2 = (datetime.now(tz=timezone.utc) + timedelta(days=5)).isoformat()
+
+    client.post("/remitos", json={**make_remito(1, sample_producto.id), "fecha_entrega": fecha_1})
+    client.post("/remitos", json={**make_remito(1, sample_producto.id), "fecha_entrega": fecha_2})
+
+    resp = client.get(
+        "/reports/pendientes-por-dia",
+        params={"fecha_desde": fecha_2, "fecha_hasta": fecha_2},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["fecha"] == fecha_2[:10]
+    assert data[0]["total_remitos"] == 1
+
 
 def test_productos_pendientes_por_dia_empty(client):
     resp = client.get("/reports/productos-pendientes-por-dia")

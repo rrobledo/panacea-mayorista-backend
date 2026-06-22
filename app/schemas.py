@@ -126,6 +126,11 @@ class RemitoDetailSchema(RemitoSummarySchema):
 class PendientesPorDiaSchema(BaseModel):
     fecha: str
     total_remitos: int
+    total_pendientes: int
+    total_en_preparacion: int
+    total_listo_para_entrega: int
+    total_en_camino: int
+    total_entregados: int
     remitos: list[RemitoSummarySchema]
 
 

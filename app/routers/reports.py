@@ -1,11 +1,15 @@
 from collections import defaultdict
-from fastapi import APIRouter, Depends
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
 
 from ..database import get_db
 from ..models import Remito, RemitoDetalle
 from ..schemas import PendientesPorDiaSchema, ProductoPendienteSchema, RemitoSummarySchema
+from ..state import EstadoRemito
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -35,24 +39,58 @@ def pendientes_entrega(db: Session = Depends(get_db)):
     summary="Remitos pendientes agrupados por día de entrega",
     description="Returns pending remitos grouped by their scheduled delivery date.",
 )
-def pendientes_por_dia(db: Session = Depends(get_db)):
-    remitos = (
-        db.query(Remito)
-        .options(joinedload(Remito.cliente))
-        .filter(Remito.fecha_facturacion.is_(None), Remito.fecha_recibido.is_(None))
-        .order_by(Remito.fecha_entrega.asc())
-        .all()
-    )
+def pendientes_por_dia(
+    fecha_desde: Optional[datetime] = Query(None, description="Filter by fecha_entrega >= fecha_desde"),
+    fecha_hasta: Optional[datetime] = Query(None, description="Filter by fecha_entrega <= fecha_hasta"),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Remito).options(joinedload(Remito.cliente))
+    query = query.filter(Remito.fecha_facturacion.is_(None), Remito.fecha_recibido.is_(None))
+    if fecha_desde:
+        query = query.filter(Remito.fecha_entrega >= fecha_desde)
+    if fecha_hasta:
+        query = query.filter(Remito.fecha_entrega <= fecha_hasta)
+    remitos = query.order_by(Remito.fecha_entrega.asc()).all()
 
-    grouped: dict[str, list] = defaultdict(list)
+    grouped: dict[str, list[RemitoSummarySchema]] = defaultdict(list)
     for r in remitos:
         fecha_key = r.fecha_entrega.strftime("%Y-%m-%d")
         grouped[fecha_key].append(RemitoSummarySchema.model_validate(r))
 
-    return [
-        PendientesPorDiaSchema(fecha=fecha, total_remitos=len(items), remitos=items)
-        for fecha, items in sorted(grouped.items())
-    ]
+    result = []
+    for fecha, items in sorted(grouped.items()):
+        total_pendientes = 0
+        total_en_preparacion = 0
+        total_listo_para_entrega = 0
+        total_en_camino = 0
+        total_entregados = 0
+
+        for remito in items:
+            if remito.estado == EstadoRemito.CREADO:
+                total_pendientes += 1
+            elif remito.estado in {EstadoRemito.EN_PRODUCCION, EstadoRemito.PREPARANDO}:
+                total_en_preparacion += 1
+            elif remito.estado == EstadoRemito.LISTO_ENTREGAR:
+                total_listo_para_entrega += 1
+            elif remito.estado == EstadoRemito.EN_ENTREGA:
+                total_en_camino += 1
+            elif remito.estado == EstadoRemito.FACTURADO:
+                total_entregados += 1
+
+        result.append(
+            PendientesPorDiaSchema(
+                fecha=fecha,
+                total_remitos=len(items),
+                total_pendientes=total_pendientes,
+                total_en_preparacion=total_en_preparacion,
+                total_listo_para_entrega=total_listo_para_entrega,
+                total_en_camino=total_en_camino,
+                total_entregados=total_entregados,
+                remitos=items,
+            )
+        )
+
+    return result
 
 
 @router.get(
