@@ -33,7 +33,7 @@ def pendientes_entrega(db: Session = Depends(get_db)):
     remitos = (
         db.query(Remito)
         .options(joinedload(Remito.cliente))
-        .filter(Remito.fecha_facturacion.is_(None))
+        .filter()
         .order_by(Remito.fecha_entrega.asc())
         .all()
     )
@@ -52,7 +52,7 @@ def pendientes_por_dia(
     db: Session = Depends(get_db),
 ):
     query = db.query(Remito).options(joinedload(Remito.cliente))
-    query = query.filter(Remito.fecha_facturacion.is_(None))
+    query = query.filter()
     if fecha_desde:
         query = query.filter(Remito.fecha_entrega >= fecha_desde)
     if fecha_hasta:
