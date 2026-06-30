@@ -33,7 +33,7 @@ def pendientes_entrega(db: Session = Depends(get_db)):
     remitos = (
         db.query(Remito)
         .options(joinedload(Remito.cliente))
-        .filter(Remito.fecha_facturacion.is_(None), Remito.fecha_recibido.is_(None))
+        .filter(Remito.fecha_facturacion.is_(None))
         .order_by(Remito.fecha_entrega.asc())
         .all()
     )
@@ -52,7 +52,7 @@ def pendientes_por_dia(
     db: Session = Depends(get_db),
 ):
     query = db.query(Remito).options(joinedload(Remito.cliente))
-    query = query.filter(Remito.fecha_facturacion.is_(None), Remito.fecha_recibido.is_(None))
+    query = query.filter(Remito.fecha_facturacion.is_(None))
     if fecha_desde:
         query = query.filter(Remito.fecha_entrega >= fecha_desde)
     if fecha_hasta:
@@ -124,7 +124,6 @@ def productos_pendientes_por_dia(
         JOIN costos_remitos r   ON d.remito_id = r.id
         JOIN costos_productos p ON d.producto_id = p.id
         WHERE r.fecha_facturacion IS NULL
-          AND r.fecha_recibido IS NULL
           AND (:fecha_desde IS NULL OR DATE(r.fecha_entrega) >= :fecha_desde)
           AND (:fecha_hasta IS NULL OR DATE(r.fecha_entrega) <= :fecha_hasta)
         GROUP BY DATE(r.fecha_entrega), p.responsable, p.nombre
